@@ -1,0 +1,151 @@
+docker run --name mysql-source -e MYSQL_ROOT_PASSWORD=rootpassword -p 3306:3306 -d mysql:5.7
+
+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
+
+
+docker exec -it mysql-source mysql -uroot -prootpassword
+
+
+CREATE DATABASE mydb;
+
+CREATE USER 'dmsuser'@'%' IDENTIFIED BY 'password';
+GRANT ALL PRIVILEGES ON mydb.* TO 'dmsuser'@'%';
+FLUSH PRIVILEGES;
+
+
+USE mydb;
+
+CREATE TABLE employees (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100),
+    position VARCHAR(100),
+    salary INT
+);
+
+INSERT INTO employees (name, position, salary)
+VALUES ('John Doe', 'Software Engineer', 80000),
+       ('Jane Smith', 'Product Manager', 90000),
+       ('Alex Brown', 'Data Scientist', 95000);
+
+SELECT * FROM employees;
+
+
+
+When setting up the **DMS Source Endpoint**, you would use this as the **Server name** in the AWS DMS setup for MySQL.
+
+Here’s how you should use it in your DMS Source Endpoint setup:
+
+- **Server name**: `ip172-18-0-25-cuq7jggl2o9000blegng-3306.direct.labs.play-with-docker.com`
+- **Port**: `3306`
+- **Username**: The MySQL user you created (e.g., `dmsuser`).
+- **Password**: The password for the MySQL user (e.g., `password`).
+
+Then proceed with setting up the migration task and follow the steps as mentioned previously.
+
+
+#############################################################################
+
+
+To migrate data from your MySQL container running in **Play with Docker** to an AWS database using **AWS DMS**, follow these steps.
+
+### **AWS DMS Migration Steps**
+
+#### **1. Prerequisites**
+Before proceeding with DMS, ensure you have the following:
+
+- An **AWS account**.
+- **MySQL container** running on Play with Docker, accessible from the internet.
+- **Amazon RDS** or any other **AWS database** as the target (in this case, let’s assume Amazon RDS for MySQL).
+- The **source MySQL database** (running in Docker) should be properly configured with access credentials and database schema.
+
+---
+
+#### **2. Set Up DMS on AWS**
+
+1. **Create a VPC** (Virtual Private Cloud):
+   - If not already done, create a VPC for your AWS environment. This will allow the AWS DMS replication instance to communicate securely with your source and target databases.
+   - Ensure that the security group attached to the VPC allows inbound access to port `3306` (MySQL) for the source database from DMS replication instances.
+
+2. **Create a DMS Replication Instance**:
+   - Go to **AWS DMS Console** → **Replication Instances**.
+   - Click **Create replication instance**.
+   - Specify the **instance class** and **allocated storage** based on your workload (e.g., `dms.r5.large`).
+   - Choose **VPC** and configure network settings for the replication instance.
+   - Allow for any necessary public access for your Play with Docker container.
+
+3. **Create the Source Endpoint (MySQL container)**:
+   - Go to **AWS DMS Console** → **Endpoints** → **Create endpoint**.
+   - **Source endpoint type**: Select `Source`.
+   - **Endpoint identifier**: Enter something like `mysql-source`.
+   - **Database engine**: Choose `MySQL`.
+   - **Server name**: Enter the **Play with Docker external IP** or DNS of the machine running the MySQL container (e.g., `<Play_with_Docker_IP>:3306`).
+   - **Port**: `3306`.
+   - **Username**: The MySQL user (`dmsuser`) you created earlier.
+   - **Password**: The password you assigned to `dmsuser` (e.g., `password`).
+   - **Test the connection** to ensure the connection is successful.
+   - Save the source endpoint.
+
+4. **Create the Target Endpoint (Amazon RDS MySQL)**:
+   - Go to **AWS DMS Console** → **Endpoints** → **Create endpoint**.
+   - **Target endpoint type**: Select `Target`.
+   - **Endpoint identifier**: Enter something like `rds-mysql-target`.
+   - **Database engine**: Choose `MySQL`.
+   - **Server name**: Enter the **RDS MySQL endpoint** (you can find this in the RDS console).
+   - **Port**: `3306`.
+   - **Username**: The MySQL user for RDS.
+   - **Password**: The password for RDS MySQL user.
+   - **Test the connection** to ensure the connection is successful.
+   - Save the target endpoint.
+
+---
+
+#### **3. Create the DMS Migration Task**
+
+1. **Create a DMS Migration Task**:
+   - Go to **AWS DMS Console** → **Database migration tasks** → **Create task**.
+   - **Task identifier**: Provide a name for your task (e.g., `mysql-to-rds-task`).
+   - **Replication instance**: Choose the replication instance you created earlier.
+   - **Source endpoint**: Select `mysql-source` (your MySQL container).
+   - **Target endpoint**: Select `rds-mysql-target` (your RDS MySQL database).
+   - **Migration type**: Choose `Migrate existing data` (if you want to migrate the current data) or `Migrate existing data and replicate ongoing changes` (if you want to replicate changes after the initial migration).
+   - **Table mappings**: Set up the rules to define which tables to migrate. For this, you can use the **default** settings if you want to migrate the entire schema or create custom rules.
+   - **Transformation rules**: Optional. You can set up rules to modify the data during migration (e.g., converting column names).
+   - **Task settings**: Choose the desired settings, such as logging options.
+
+2. **Start the Task**:
+   - Once the task is created, **start the migration task** by clicking **Start task**.
+   - The DMS task will now start migrating data from your MySQL source (Play with Docker) to the target RDS MySQL database.
+
+---
+
+#### **4. Monitor the Migration**
+
+- Go to the **DMS Console** → **Tasks** to monitor the status of your migration task.
+- The task will show the status of the migration, such as:
+  - **Creating endpoint**: When DMS is establishing the connection.
+  - **Ready**: When the replication task is waiting to start.
+  - **Running**: When data is actively being migrated.
+  - **Completed**: When the task completes successfully.
+  - **Error**: If any issues occur during migration, you can view the error details and take corrective actions.
+
+---
+
+#### **5. Verify the Migration**
+
+- After the migration task is complete, check your **RDS MySQL database** to verify that the data has been copied over successfully.
+- Run queries on the RDS database to confirm the data and schema match the source database in your MySQL container.
+
+```sql
+SELECT * FROM employees;
+```
+
+You should see the same data as in the source database (MySQL container).
+
+---
+
+### **Summary of Steps**
+1. Set up **AWS DMS** with a replication instance.
+2. Create **source** (Play with Docker MySQL) and **target** (RDS MySQL) endpoints.
+3. Configure the **migration task**.
+4. Monitor the task progress.
+5. Verify the migrated data in the RDS MySQL database.
